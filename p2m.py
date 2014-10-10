@@ -39,7 +39,10 @@ parser.add_argument(
     action='version',
     version='%(prog)s 1.0')
 
-args = parser.parse_args()
+try:
+    args = parser.parse_args()
+except IOError, msg:
+    parser.error(str(msg))
 
 #get content from CLI
 get_json_data=args.json_parser
@@ -123,6 +126,7 @@ def create_pillar(id,new):
 def update_pillar(id,key):
     if key:
         upitem={}
+        fam={}
         upitem['$set']=key
         pillar.update(id,upitem,upsert=True)
         print "Success: Updated id: %s 's pillar data: %s,pls check it." % (id,key)
@@ -138,10 +142,9 @@ def dictkeylist(data,fkey,keylist):
             if fkey:
                 temp_key=fkey+'.'+temp_key
             #print "%s.%s : %s" %(fkey,temp_key,temp_value)
+            keylist.append(temp_key)
             if isinstance(temp_value,dict) :
                 dictkeylist(temp_value,temp_key,keylist) #call itself to get all key
-            else:
-                keylist.append(temp_key)
     return keylist
 #make a multiple dict into 2 level dict
 #Exp: {'aa':{'bb':'cc','dd':'ee'}} ==> {'aa.bb': 'cc', 'aa.dd': 'ee'} 
@@ -152,11 +155,9 @@ def simpledict(data,keys,lastdict):
             temp_value = data[temp_key]
             if keys:
                 temp_key=keys+'.'+temp_key
+            lastdict[temp_key]=temp_value
             if isinstance(temp_value,dict) :
                 tmp_tmp_value=simpledict(temp_value,temp_key,lastdict) #call itself to get all key
-                #lastdict= lastdict.items() + tmp_tmp_value.items()
-            else:
-                lastdict[temp_key]=temp_value
         return lastdict 
 ###### For test simpledict ###########
 #aaa={'aa':{'bb':'cc','dd':'ee'}}
@@ -168,17 +169,18 @@ def simpledict(data,keys,lastdict):
 ######################################
 def search_pillar(idkey,keyword):
     search_result=check_exists(idkey,keyword)
+    #print "search_result:   %s" % search_result
     if search_result:
         for result in search_result:
             key_list=dictkeylist(result,'',keylist)
-            #print key_list
+            #print "key_list:  %s" % key_list
             if result:
                 result_simple=simpledict(result,'',tmpdict)
                 #print "Minion id pillar data in mongodb is: %s" % result_simple
                 for keytmp in key_list:
                     if keyword == keytmp:
                         #print "%s value is : %s" % (keyword,result_simple[keytmp])
-                        return result_simple[keytmp] 
+                        return result_simple[keyword] 
     else:
         return False
 
