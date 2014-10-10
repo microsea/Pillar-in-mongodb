@@ -6,7 +6,7 @@ or directly from the command line input pillar's data to the mongodb.
 import argparse
 #from pymongo import Connection
 from pymongo import *
-import salt,sys,yaml
+import salt,sys,yaml,re
 
 parser = argparse.ArgumentParser(
     description='Import SaltStack pillar data to mongodb.',
@@ -28,6 +28,8 @@ parser.add_argument('-D','--delete',action='store',default=False,
     dest='delete_pillar',help='Delete a pillar item.Script will prompt delete or not,only if use -F to force delete item')
 parser.add_argument('-S','--search',action='store',default=False,
     dest='search_pillar',help='Return a json pillar data.',type=str,metavar='pillar_name')
+parser.add_argument('-C','--check-dict',action='store',default=False,
+    dest='checkdict',help='Check pillar item\'s value is a dict',type=str,metavar='checkdict')
 parser.add_argument('-s','--salt',action='store',default=False,
     dest='saltkey',help='Use salt commmand check pillar data.',type=str,metavar='pillar item')
 parser.add_argument('-F','--force',action='store_true',default=False,
@@ -54,6 +56,7 @@ uppillar=args.update_pillar
 forceaction=args.forceaction
 saltkey=args.saltkey
 pillarfile=args.pillar_file
+checkdict=args.checkdict
 
 #connect to mongodb
 databaseName = "pillar_mongodb"
@@ -146,7 +149,7 @@ def dictkeylist(data,fkey,keylist):
             if isinstance(temp_value,dict) :
                 dictkeylist(temp_value,temp_key,keylist) #call itself to get all key
     return keylist
-#make a multiple dict into 2 level dict
+#make a multiple dict into key:value mode dict
 #Exp: {'aa':{'bb':'cc','dd':'ee'}} ==> {'aa.bb': 'cc', 'aa.dd': 'ee'} 
 def simpledict(data,keys,lastdict):
     if isinstance(data,dict):
@@ -167,6 +170,8 @@ def simpledict(data,keys,lastdict):
 #print simp
 #exit()
 ######################################
+
+# Seach pillar item in mongodb
 def search_pillar(idkey,keyword):
     search_result=check_exists(idkey,keyword)
     #print "search_result:   %s" % search_result
@@ -183,6 +188,31 @@ def search_pillar(idkey,keyword):
                         return result_simple[keyword] 
     else:
         return False
+# Check pillar item's value is a dict
+def check_is_dict(idkey,keyword):
+    YN='0'
+    skey=''
+    if re.match('.',keyword):
+        keylist=keyword.split('.')
+        for i in range(0,len(keylist)):
+            if i<len(keylist):
+                if i>0:
+                    skey=skey+'.'+keylist[i]
+                else:
+                    skey=keylist[i]
+        #print "skey: %s" % skey
+        result=search_pillar(idkey,skey)
+        if isinstance(result,dict):
+            YN='1'
+    else:
+        result=search_pillar(idkey,skey)
+        if isinstance(result,dict):
+            YN='1'
+    if YN == '1':
+        return True
+    else:
+        return False
+        
 
 ############# MAIN ########################
 #init pillar data
@@ -191,6 +221,11 @@ idkey={}
 tmpdict={}
 keylist=[]
 idkey['_id']=minionid
+
+# Test check_is_dict function
+if checkdict:
+    print check_is_dict(idkey,checkdict)
+
 ####################
 #search pillar
 ####################
@@ -250,7 +285,7 @@ if pillarfile:
     readdata=yaml.load(pillarfile)
     if readdata:
         update_pillar(idkey,readdata)
-        print "Success: Finish import action,pls check it."
+        #print "Success: Finish import action,pls check it."
     else:
         print "Faild: No data in pillar file!"
     print readdata
